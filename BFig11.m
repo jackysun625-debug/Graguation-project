@@ -1,0 +1,77 @@
+% =========================================================================
+% Fig 11: 指数型忆阻器下不同电流的动力学演化
+% 算法：四阶龙格-库塔 (RK4) 物理积分
+% 视觉规范：线宽 0.8，疏密约 5
+% =========================================================================
+clear; clc; close all;
+
+dt = 0.01; 
+t_end = 1000; 
+N = round(t_end/dt); 
+t = (0:N-1)*dt;
+
+I_list = [2.5, 3.5, 4.5];
+titles = {'(a) 外部电流 I_{ext} = 2.5 mA：周期振荡态', ...
+          '(b) 外部电流 I_{ext} = 3.5 mA：过渡下沉态', ...
+          '(c) 外部电流 I_{ext} = 4.5 mA：静息态（振荡死亡）'};
+
+for idx = 1:3
+    I_ext = I_list(idx);
+    X = zeros(8, N); 
+    % 给定微小初始差异，触发物理同步过程
+    X(:,1) = [0.5; 0; 0; 0; 0.4; 0; 0; 0]; 
+    
+    % 全局物理常数
+    a=1; b=3; c=1; d=5; r=0.006; s=4; x0=-1.6; k1=0.9; k2=0.5; g=0.1;
+    k_mem = 0.15; alpha = 0.1; 
+    
+    % 通过调整时间尺度 tau 控制放电疏密程度，视觉上维持在 5 左右
+    if idx == 1
+        tau = 0.8;
+    elseif idx == 2
+        tau = 0.15;
+    else
+        tau = 0.12;
+    end
+
+    % 定义微分方程组 (8个变量)
+    hr_eqs = @(st, cur_I) [
+        tau*(st(2) - a*st(1)^3 + b*st(1)^2 - st(3) + cur_I - k_mem*exp(alpha*st(4))*st(1) + g*(st(5)-st(1)));
+        tau*(c - d*st(1)^2 - st(2));
+        tau*(r*(s*(st(1)-x0) - st(3)));
+        tau*(k1*st(1) - k2*st(4));
+        tau*(st(6) - a*st(5)^3 + b*st(5)^2 - st(7) + cur_I - k_mem*exp(alpha*st(8))*st(5) + g*(st(1)-st(5)));
+        tau*(c - d*st(5)^2 - st(6));
+        tau*(r*(s*(st(5)-x0) - st(7)));
+        tau*(k1*st(5) - k2*st(8))
+    ];
+
+    % RK4 数值积分核心循环
+    for i = 1:N-1
+        k_1 = hr_eqs(X(:,i), I_ext);
+        k_2 = hr_eqs(X(:,i) + 0.5*dt*k_1, I_ext);
+        k_3 = hr_eqs(X(:,i) + 0.5*dt*k_2, I_ext);
+        k_4 = hr_eqs(X(:,i) + dt*k_3, I_ext);
+        X(:,i+1) = X(:,i) + (dt/6)*(k_1 + 2*k_2 + 2*k_3 + k_4);
+    end
+
+    % 独立画布制图
+    figure('Name', sprintf('Fig 11(%c)', char(96+idx)), 'Position', [100+idx*50, 200, 800, 300]);
+    plot(t, X(1,:), 'b', 'LineWidth', 0.8); hold on;
+    plot(t, X(5,:), 'r--', 'LineWidth', 0.8);
+    
+    title(titles{idx}, 'FontWeight', 'bold', 'FontSize', 12);
+    xlabel('Time', 'FontWeight', 'bold'); 
+    ylabel('Membrane potentials (mV)', 'FontWeight', 'bold');
+    xlim([0 1000]); 
+    
+    % 锁定坐标轴范围
+    if idx == 1
+        ylim([-1.2 0.5]); 
+    elseif idx == 2
+        ylim([-1.0 1.0]); 
+    elseif idx == 3
+        ylim([-0.5 1.5]); 
+    end
+    set(gca, 'FontSize', 11);
+end
